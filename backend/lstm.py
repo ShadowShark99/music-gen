@@ -25,9 +25,9 @@ def train():
     X, y = torch.load("dataset.pt")
 
     with open("vocab.pkl", "rb") as f:
-        note_to_idx, idx_to_note = pickle.load(f)
+        event_to_idx, idx_to_event = pickle.load(f)
 
-    model = MusicLSTM(len(note_to_idx))
+    model = MusicLSTM(len(event_to_idx))
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
@@ -40,7 +40,7 @@ def train():
         print(f"Epoch {epoch+1}/{EPOCHS} — Loss: {loss.item():.4f}")
 
     torch.save(model.state_dict(), "model.pt")
-    generate(model, X[0].tolist(), idx_to_note)
+    generate(model, X[0].tolist(), idx_to_event)
 
 def generate(model, seed, idx_to_note, length=200):
     model.eval()
@@ -58,15 +58,15 @@ def generate(model, seed, idx_to_note, length=200):
 
     time = 0.0 # write notes based on time, sequentially adds notes to the instrument
     for idx in notes:
-        pitch = idx_to_note[idx]
+        pitch, duration = idx_to_note[idx]
         note = pretty_midi.Note(
             velocity=100,
             pitch=pitch,
             start=time,
-            end=time + 0.5
+            end=time + duration
         )
         instrument.notes.append(note)
-        time += 0.5
+        time += duration
 
     midi.instruments.append(instrument)
     midi.write("output/generated.mid")

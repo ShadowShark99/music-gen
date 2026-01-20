@@ -6,34 +6,39 @@ import torch
 
 SEQ_LENGTH = 32
 MIDI_DIR = "midi"
+DURATIONS = [.25,.5,1.0,2.0]
+
+def quantize_duration(d):
+    return min(DURATIONS, key=lambda x: abs(x-d))
 
 def midi_to_notes(path):
     midi = pretty_midi.PrettyMIDI(path)
-    notes = []
+    events = []
 
     for instrument in midi.instruments:
         if instrument.is_drum:
             continue
         for note in instrument.notes:
-            notes.append(note.pitch)
+            duration = quantize_duration(note.end - note.start)
+            events.append((note.pitch, duration)) # note, dur data point
 
-    return notes
+    return events
 
 def build_dataset():
-    all_notes = []
+    all_events = []
 
     for file in os.listdir(MIDI_DIR):
         if file.endswith(".mid"):
             path = os.path.join(MIDI_DIR, file)
-            all_notes.extend(midi_to_notes(path))
+            all_events.extend(midi_to_notes(path))
 
     # Create vocab
-    unique_notes = sorted(set(all_notes))
-    note_to_idx = {n: i for i, n in enumerate(unique_notes)}
-    idx_to_note = {i: n for n, i in note_to_idx.items()}
+    unique_events = sorted(set(all_events))
+    event_to_idx = {e: i for i, e in enumerate(unique_events)}
+    idx_to_event = {i: e for e, i in event_to_idx.items()}
 
     # Encode notes
-    encoded = [note_to_idx[n] for n in all_notes]
+    encoded = [event_to_idx[e] for e in all_events]
 
     # Create sequences
     X, y = [], []
@@ -47,7 +52,7 @@ def build_dataset():
     # Save
     torch.save((X, y), "dataset.pt")
     with open("vocab.pkl", "wb") as f:
-        pickle.dump((note_to_idx, idx_to_note), f)
+        pickle.dump((event_to_idx, idx_to_event), f)
 
     print(f"Dataset created: {X.shape[0]} sequences")
 
