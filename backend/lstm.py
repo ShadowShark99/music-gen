@@ -4,6 +4,7 @@ import torch.nn as nn
 import pretty_midi
 import os
 import torch.nn.functional as F
+import sys
 os.makedirs("output", exist_ok=True)
 
 
@@ -45,7 +46,8 @@ def train():
         print(f"Epoch {epoch+1}/{EPOCHS} — Loss: {loss.item():.4f}")
 
     torch.save(model.state_dict(), "model.pt")
-    generate(model, X[0].tolist(), idx_to_event)
+    # generate model right after save
+    # generate(model, X[0].tolist(), idx_to_event)
 
 def generate(model, seed, idx_to_event, length=200):
     model.eval()
@@ -81,5 +83,27 @@ def generate(model, seed, idx_to_event, length=200):
     midi.write("output/generated.mid")
     print("Generated output/generated.mid")
 
+def load_model(vocab_size, path="model.pt"):
+    model = MusicLSTM(vocab_size)
+    model.load_state_dict(torch.load(path))
+    model.eval
+    return model
+
+def generate_only(length=200):
+    X, _ = torch.load("dataset.pt")
+    with open("vocab.pkl", "rb") as f:
+        event_to_idx, idx_to_event = pickle.load(f)
+    model = load_model(len(event_to_idx))
+    seed = X[0].tolist()
+    generate(model, seed, idx_to_event)
+
 if __name__ == "__main__":
-    train()
+    # train()
+    if len(sys.argv) < 2:
+        print("Usage: python lstm.py [train|generate]")
+    if sys.argv[1] == "train":
+        train()
+    
+    if sys.argv[1] == "generate":
+        generate_only()
+    
