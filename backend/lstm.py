@@ -3,11 +3,16 @@ import torch
 import torch.nn as nn
 import pretty_midi
 import os
+import torch.nn.functional as F
 os.makedirs("output", exist_ok=True)
 
 
 SEQ_LENGTH = 32
 EPOCHS = 30
+
+def sample(logits, temperature=0.8):
+    probs = F.softmax(logits / temperature, dim=-1)
+    return torch.multinomial(probs, 1).item()
 
 class MusicLSTM(nn.Module):
     def __init__(self, vocab_size, embed=128, hidden=256):
@@ -42,15 +47,19 @@ def train():
     torch.save(model.state_dict(), "model.pt")
     generate(model, X[0].tolist(), idx_to_event)
 
-def generate(model, seed, idx_to_note, length=200):
+def generate(model, seed, idx_to_event, length=200):
     model.eval()
     notes = seed.copy()
 
     for _ in range(length):
-        x = torch.tensor(notes[-SEQ_LENGTH:]).unsqueeze(0)
+        context = notes[-SEQ_LENGTH:]
+        if len(context) < SEQ_LENGTH:
+            context = [context[0]] * (SEQ_LENGTH - len(context)) + context
+
+        x = torch.tensor(context).unsqueeze(0)
         with torch.no_grad():
             logits = model(x)
-        next_idx = torch.argmax(logits, dim=1).item()
+        next_idx = sample(logits)
         notes.append(next_idx)
 
     midi = pretty_midi.PrettyMIDI() # midi object
@@ -58,7 +67,7 @@ def generate(model, seed, idx_to_note, length=200):
 
     time = 0.0 # write notes based on time, sequentially adds notes to the instrument
     for idx in notes:
-        pitch, duration = idx_to_note[idx]
+        pitch, duration = idx_to_event[idx]
         note = pretty_midi.Note(
             velocity=100,
             pitch=pitch,
