@@ -3,10 +3,17 @@ import pickle
 import pretty_midi
 import numpy as np
 import torch
+from collections import defaultdict
+from music21 import chord
 
 SEQ_LENGTH = 32
 MIDI_DIR = "midi"
 DURATIONS = [.25,.5,1.0,2.0]
+TIME_TOL = 0.05   # notes within this window = same chord
+
+def chord_to_root_quality(pitches):
+    c = chord.Chord(pitches)
+    return c.root().midi, c.quality
 
 def quantize_duration(d):
     return min(DURATIONS, key=lambda x: abs(x-d))
@@ -18,9 +25,19 @@ def midi_to_notes(path):
     for instrument in midi.instruments:
         if instrument.is_drum:
             continue
+
+        notes_by_time = defaultdict(list)
+
         for note in instrument.notes:
-            duration = quantize_duration(note.end - note.start)
-            events.append((note.pitch, duration)) # note, dur data point
+            t = round(note.start / TIME_TOL) * TIME_TOL
+            notes_by_time[t].append(note)
+
+        for t in sorted(notes_by_time): 
+            chord_notes = notes_by_time[t]
+            pitches = tuple(sorted(n.pitch for n in chord_notes))
+            duration = quantize_duration(max(n.end for n in chord_notes) - t)
+            root, quality = chord_to_root_quality(pitches)
+            events.append((root, quality, duration)) # calc duration of the whole chord
 
     return events
 

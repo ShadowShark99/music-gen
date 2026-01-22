@@ -10,7 +10,16 @@ os.makedirs("output", exist_ok=True)
 
 SEQ_LENGTH = 32
 EPOCHS = 30
+CHORD_INTERVALS = {
+    "major": [0, 4, 7],
+    "minor": [0, 3, 7],
+    "diminished": [0, 3, 6],
+    "dominant-seventh": [0, 4, 7, 10],
+}
+BEATS_PER_MEASURE = 4
 
+
+# makes music more random, less loops
 def sample(logits, temperature=0.8):
     probs = F.softmax(logits / temperature, dim=-1)
     return torch.multinomial(probs, 1).item()
@@ -69,14 +78,18 @@ def generate(model, seed, idx_to_event, length=200):
 
     time = 0.0 # write notes based on time, sequentially adds notes to the instrument
     for idx in notes:
-        pitch, duration = idx_to_event[idx]
-        note = pretty_midi.Note(
-            velocity=100,
-            pitch=pitch,
-            start=time,
-            end=time + duration
-        )
-        instrument.notes.append(note)
+        root, quality, duration = idx_to_event[idx]
+        intervals = CHORD_INTERVALS.get(quality, [0])
+        pitches = [root + i for i in intervals]
+        for pitch in pitches:
+            note = pretty_midi.Note(
+                velocity=100,
+                pitch=pitch,
+                start=time,
+                end=time + duration
+            )
+            instrument.notes.append(note)
+        
         time += duration
 
     midi.instruments.append(instrument)
@@ -86,7 +99,7 @@ def generate(model, seed, idx_to_event, length=200):
 def load_model(vocab_size, path="model.pt"):
     model = MusicLSTM(vocab_size)
     model.load_state_dict(torch.load(path))
-    model.eval
+    model.eval()
     return model
 
 def generate_only(length=200):
