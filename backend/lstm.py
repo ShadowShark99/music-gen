@@ -73,14 +73,22 @@ def generate(model, seed, idx_to_event, length=200):
         next_idx = sample(logits)
         notes.append(next_idx)
 
-    midi = pretty_midi.PrettyMIDI() # midi object
+    #. midi = pretty_midi.PrettyMIDI() # midi object
+    midi = pretty_midi.PrettyMIDI(initial_tempo=120)
     instrument = pretty_midi.Instrument(program=0) # a track of the song
 
     time = 0.0 # write notes based on time, sequentially adds notes to the instrument
+    beat_in_measure = 0.0
+
     for idx in notes:
         root, quality, duration = idx_to_event[idx]
         intervals = CHORD_INTERVALS.get(quality, [0])
         pitches = [root + i for i in intervals]
+
+        if beat_in_measure + duration > BEATS_PER_MEASURE:
+            time += BEATS_PER_MEASURE - beat_in_measure
+            beat_in_measure = 0.0
+
         for pitch in pitches:
             note = pretty_midi.Note(
                 velocity=100,
@@ -89,8 +97,9 @@ def generate(model, seed, idx_to_event, length=200):
                 end=time + duration
             )
             instrument.notes.append(note)
-        
+
         time += duration
+        beat_in_measure += duration
 
     midi.instruments.append(instrument)
     midi.write("output/generated.mid")

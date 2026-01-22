@@ -37,6 +37,8 @@ def midi_to_notes(path):
             pitches = tuple(sorted(n.pitch for n in chord_notes))
             duration = quantize_duration(max(n.end for n in chord_notes) - t)
             root, quality = chord_to_root_quality(pitches)
+            if quality not in {"major", "minor", "diminished", "dominant-seventh"}:
+                continue
             events.append((root, quality, duration)) # calc duration of the whole chord
 
     return events
