@@ -14,7 +14,11 @@ CHORD_INTERVALS = {
     "major": [0, 4, 7],
     "minor": [0, 3, 7],
     "diminished": [0, 3, 6],
+    "augmented": [0, 4, 8],
     "dominant-seventh": [0, 4, 7, 10],
+    "major-seventh": [0, 4, 7, 11],
+    "minor-seventh": [0, 3, 7, 10],
+    "half-diminished": [0, 3, 6, 10],
 }
 BEATS_PER_MEASURE = 4
 
