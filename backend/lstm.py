@@ -18,6 +18,17 @@ CHORD_INTERVALS = {
 }
 BEATS_PER_MEASURE = 4
 
+# instrument range
+PIANO_RANGE = (36, 84)   # C2–C6
+BASS_RANGE  = (24, 52)   # C1–E3
+GUITAR_RANGE   = (48, 84)   # C4–C6
+
+def clamp_pitch(p, l, h):
+    while p < l:
+        p += 12
+    while p > h:
+        p -= 12
+    return p
 
 # makes music more random, less loops
 def sample(logits, temperature=0.8):
@@ -73,6 +84,12 @@ def generate(model, seed, idx_to_event, length=200):
         next_idx = sample(logits)
         notes.append(next_idx)
 
+    # using preset instruments
+    piano = pretty_midi.Instrument(program=pretty_midi.instrument_name_to_program("Acoustic Grand Piano"))
+    bass = pretty_midi.Instrument(program=pretty_midi.instrument_name_to_program("Electric Bass (finger)"))
+    guitar = pretty_midi.Instrument(program=pretty_midi.instrument_name_to_program("Acoustic Guitar (steel)"))
+
+
     #. midi = pretty_midi.PrettyMIDI() # midi object
     midi = pretty_midi.PrettyMIDI(initial_tempo=120)
     instrument = pretty_midi.Instrument(program=0) # a track of the song
@@ -89,6 +106,35 @@ def generate(model, seed, idx_to_event, length=200):
             time += BEATS_PER_MEASURE - beat_in_measure
             beat_in_measure = 0.0
 
+        # bass is one note
+        bass_pitch = clamp_pitch(root, *BASS_RANGE)
+        bass.notes.append(pretty_midi.Note(
+            velocity=90,
+            pitch=bass_pitch,
+            start=time,
+            end=time + duration
+        ))
+
+        # piano
+        for p in pitches:
+            piano_pitch = clamp_pitch(p, *PIANO_RANGE)
+            piano.notes.append(pretty_midi.Note(
+                velocity=100,
+                pitch=piano_pitch,
+                start=time,
+                end=time + duration
+            ))
+
+        # guitar
+        for p in pitches:
+            guitar_pitch = clamp_pitch(p, *GUITAR_RANGE)
+            guitar.notes.append(pretty_midi.Note(
+                velocity=100,
+                pitch=guitar_pitch,
+                start=time,
+                end=time + duration * .9
+            ))
+
         for pitch in pitches:
             note = pretty_midi.Note(
                 velocity=100,
@@ -101,7 +147,8 @@ def generate(model, seed, idx_to_event, length=200):
         time += duration
         beat_in_measure += duration
 
-    midi.instruments.append(instrument)
+    # midi.instruments.append(instrument)
+    midi.instruments.extend([piano,bass,guitar])
     midi.write("output/generated.mid")
     print("Generated output/generated.mid")
 
