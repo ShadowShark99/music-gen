@@ -151,6 +151,14 @@ PIANO_RANGE = (36, 84)   # C2–C6
 BASS_RANGE  = (24, 52)   # C1–E3
 GUITAR_RANGE   = (48, 84)   # C4–C6
 
+# according to the chord map, find the chord at this beat
+def get_chord_at_time(chord_times, chords, t):
+    for i in range(len(chord_times) - 1):
+        if chord_times[i] <= t < chord_times[i + 1]:
+            return i, chords[i]
+    return len(chords) - 1, chords[-1]
+
+
 def snap_pitch_to_chord(pitch, root, quality):
     if quality not in CHORD_INTERVALS:
         return pitch
@@ -306,7 +314,7 @@ def build_chord_times(chords):
         t += d
     return times
 
-def generate_instruments(chords, chord_times, notes_per_chord=4):
+def generate_instruments(chords, chord_times):
     with open("instrument_vocab.pkl", "rb") as f:
         token_to_idx, idx_to_token = pickle.load(f)
 
@@ -316,34 +324,44 @@ def generate_instruments(chords, chord_times, notes_per_chord=4):
 
     vocab_by_inst = split_vocab_by_instrument(idx_to_token)
     instruments = defaultdict(list)
+    inst_time = defaultdict(float)
 
     for inst_id, valid_idxs in vocab_by_inst.items():
-        seed = [valid_idxs[0]] * SEQ_LENGTH  # instrument-specific seed
+        seed = [valid_idxs[0]] * SEQ_LENGTH
 
-        for chord_idx, (root, quality, dur) in enumerate(chords):
-            for _ in range(notes_per_chord):
-                x = torch.tensor(seed[-SEQ_LENGTH:]).unsqueeze(0)
+        for _ in range(120):  # notes per instrument
+            x = torch.tensor(seed[-SEQ_LENGTH:]).unsqueeze(0)
 
-                with torch.no_grad():
-                    logits = model(x)
+            with torch.no_grad():
+                logits = model(x)
 
-                # mask to this instrument only
-                mask = torch.full_like(logits, float("-inf"))
-                mask[:, valid_idxs] = 0
-                logits = logits + mask
+            # mask to this instrument
+            mask = torch.full_like(logits, float("-inf"))
+            mask[:, valid_idxs] = 0
+            logits = logits + mask
 
-                idx = sample(logits)
+            idx = sample(logits)
+            inst, pitch, duration, offset = idx_to_token[idx]
 
-                inst, pitch, duration, offset = idx_to_token[idx]
-                pitch = snap_pitch_to_chord(pitch, root, quality)
+            # determine chord by current beat of song
+            chord_idx, (root, quality, _) = get_chord_at_time(
+                chord_times, chords, inst_time[inst_id]
+            )
 
-                instruments[inst_id].append(
-                    (chord_idx, pitch, duration, offset)
-                )
+            pitch = snap_pitch_to_chord(pitch, root, quality)
 
-                seed.append(idx)
+            start = inst_time[inst_id]
+            instruments[inst_id].append(
+                (start, pitch, duration)
+            )
+
+            # Adance what beat of the song is being played for this instrument
+            inst_time[inst_id] += duration
+
+            seed.append(idx)
 
     return instruments
+
 
 
 
@@ -358,12 +376,8 @@ def render_midi(chords, chord_times, instruments, out_path="output/generated.mid
         program = pretty_midi.instrument_name_to_program(name)
         instrument = pretty_midi.Instrument(program=program)
 
-        for chord_idx, pitch, duration, offset in notes:
-            if chord_idx >= len(chord_times):
-                continue
-
-            start = chord_times[chord_idx] + offset * 0.05
-            end = start + duration
+        for start, pitch, duration in notes:
+ 
 
             pitch = clamp_pitch(pitch, *pitch_range)
 
@@ -398,7 +412,7 @@ if __name__ == "__main__":
         chords = generate_chords()
         chord_times = build_chord_times(chords)
         instruments = generate_instruments(chords, chord_times)
-        # call your MIDI rendering here
+        
         render_midi(chords, chord_times, instruments)
 
     else:
