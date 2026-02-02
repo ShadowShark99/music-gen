@@ -270,21 +270,6 @@ def train_instrument_model():
 
 
 
-
-def load_model(vocab_size, path="model.pt"):
-    model = MusicLSTM(vocab_size)
-    model.load_state_dict(torch.load(path))
-    model.eval()
-    return model
-
-def generate_only(length=200):
-    X, _ = torch.load("dataset.pt")
-    with open("vocab.pkl", "rb") as f:
-        event_to_idx, idx_to_event = pickle.load(f)
-    model = load_model(len(event_to_idx))
-    seed = X[0].tolist()
-    generate(model, seed, idx_to_event)
-
 # gen chord structure
 def generate_chords(length=64):
     with open("chord_vocab.pkl", "rb") as f:
