@@ -151,6 +151,29 @@ PIANO_RANGE = (36, 84)   # C2–C6
 BASS_RANGE  = (24, 52)   # C1–E3
 GUITAR_RANGE   = (48, 84)   # C4–C6
 
+def snap_pitch_to_chord(pitch, root, quality):
+    if quality not in CHORD_INTERVALS:
+        return pitch
+
+    chord_pcs = [(root + i) % 12 for i in CHORD_INTERVALS[quality]]
+
+    octave = pitch // 12
+    candidates = []
+
+    for pc in chord_pcs:
+        for o in [octave - 1, octave, octave + 1]:
+            candidates.append(pc + 12 * o)
+
+    return min(candidates, key=lambda x: abs(x - pitch))
+
+
+def split_vocab_by_instrument(idx_to_token):
+    by_inst = defaultdict(list)
+    for idx, (inst, pitch, dur, off) in idx_to_token.items():
+        by_inst[inst].append(idx)
+    return by_inst
+
+
 def clamp_pitch(p, l, h):
     while p < l:
         p += 12
@@ -283,29 +306,46 @@ def build_chord_times(chords):
         t += d
     return times
 
-def generate_instruments(chords, chord_times):
+def generate_instruments(chords, chord_times, notes_per_chord=4):
     with open("instrument_vocab.pkl", "rb") as f:
-        _, idx_to_token = pickle.load(f)
+        token_to_idx, idx_to_token = pickle.load(f)
 
-    model = MusicLSTM(len(idx_to_token))
+    model = MusicLSTM(len(token_to_idx))
     model.load_state_dict(torch.load("instrument_model.pt"))
     model.eval()
 
+    vocab_by_inst = split_vocab_by_instrument(idx_to_token)
     instruments = defaultdict(list)
-    seed = list(range(SEQ_LENGTH))
 
-    notes = seed.copy()
-    for _ in range(300):
-        x = torch.tensor(notes[-SEQ_LENGTH:]).unsqueeze(0)
-        with torch.no_grad():
-            logits = model(x)
-        notes.append(sample(logits))
+    for inst_id, valid_idxs in vocab_by_inst.items():
+        seed = [valid_idxs[0]] * SEQ_LENGTH  # instrument-specific seed
 
-    for idx in notes:
-        chord_idx, inst_id, pitch, duration, offset = idx_to_token[idx]
-        instruments[inst_id].append((chord_idx, pitch, duration, offset))
+        for chord_idx, (root, quality, dur) in enumerate(chords):
+            for _ in range(notes_per_chord):
+                x = torch.tensor(seed[-SEQ_LENGTH:]).unsqueeze(0)
+
+                with torch.no_grad():
+                    logits = model(x)
+
+                # mask to this instrument only
+                mask = torch.full_like(logits, float("-inf"))
+                mask[:, valid_idxs] = 0
+                logits = logits + mask
+
+                idx = sample(logits)
+
+                inst, pitch, duration, offset = idx_to_token[idx]
+                pitch = snap_pitch_to_chord(pitch, root, quality)
+
+                instruments[inst_id].append(
+                    (chord_idx, pitch, duration, offset)
+                )
+
+                seed.append(idx)
 
     return instruments
+
+
 
 def render_midi(chords, chord_times, instruments, out_path="output/generated.mid"):
     midi = pretty_midi.PrettyMIDI(initial_tempo=120)
@@ -332,7 +372,7 @@ def render_midi(chords, chord_times, instruments, out_path="output/generated.mid
             if note:
                 instrument.notes.append(note)
 
-            instrument.notes.append(note)
+            #instrument.notes.append(note)
 
         midi.instruments.append(instrument)
 

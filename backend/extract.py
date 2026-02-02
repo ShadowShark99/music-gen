@@ -122,7 +122,7 @@ def midi_to_instrument_events(path, chord_track):
             offset = start - chord_times[chord_idx]
 
             events[inst_id].append(
-                (chord_idx, note.pitch, duration, offset)
+                (note.pitch, duration, offset)
             )
 
     return events
@@ -224,9 +224,8 @@ def build_instrument_dataset():
                 continue
 
             seq = []
-            for chord_idx, pitch, duration, offset in events:
+            for pitch, duration, offset in events:
                 token = (
-                    chord_idx,
                     inst_id,
                     pitch,
                     duration,
