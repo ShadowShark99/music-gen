@@ -7,10 +7,11 @@ const MusicButton = () => {
   const togglePlay = () => {
     if (play) {
       audioRef.current?.pause();
+      setPlay(false);
     } else {
       audioRef.current?.play();
+      setPlay(true);
     }
-
   };
 
   return (
@@ -18,8 +19,10 @@ const MusicButton = () => {
       <button onClick={togglePlay}>{play ? 'Pause' : 'Play'}</button>
       <audio
         ref={audioRef}
-        src=".../audio/generated.mid"
+        src="/audio/generated.mid"
         onEnded={() => setPlay(false)}
+        onPlay={() => setPlay(true)}
+        onPause={() => setPlay(false)}
       />
     </>
   )

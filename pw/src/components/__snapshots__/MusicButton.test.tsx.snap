@@ -1,0 +1,15 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`App component > renders magnificent monkeys 1`] = `
+<div>
+  <div>
+    Music
+  </div>
+  <button>
+    Play
+  </button>
+  <audio
+    src=".../audio/generated.mid"
+  />
+</div>
+`;
